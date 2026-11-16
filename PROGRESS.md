@@ -42,7 +42,32 @@
 - [ ] Code cleanup, docs, final review
 
 ## Design decisions
-_(record decision + reason here)_
+
+### Record format (on disk)
+```
+┌──────────────────────── header (21 bytes) ─────────────────────┬──── body ────┐
+│  crc32 │ timestamp │ key_size │ value_size │ flags             │ key │ value │
+│ uint32 │  uint64   │  uint32  │  uint32    │ uint8             │     │       │
+└────────────────────────────────────────────────────────────────┴──────────────┘
+```
+1. **key_size / value_size = uint32_t.** Allows large values; symmetric and simple. (uint16 for keys would save 2 B/record — rejected for simplicity.) Code will enforce smaller max key/value sizes (memory safety on Get; see #6).
+2. **All integers little-endian, fixed.** Same bytes on any machine. LE matches nearly all CPUs, so encoding compiles to a plain copy. Fields are serialized one by one, never by writing a struct (padding + endianness).
+3. **CRC32 slot at the front, reserved now (written as 0 in M1, computed in M2).** Fixes the format up front so M2 doesn't rewrite read/write code and tests. Placed first so it covers one contiguous range (everything after it). CRC *detects* corruption; it doesn't repair it.
+4. **Tombstone = flags byte, bit0.** `value_size == 0` rejected: collides with empty values. Sentinel `value_size == UINT32_MAX` works but is implicit; flags is explicit and leaves 7 bits for future use.
+5. **timestamp = uint64_t.** For debugging and future features (TTL); also fixes the format up front. **Recency is decided by log position (file_id, offset), never by timestamp**, because wall clocks can go backwards.
+
+### Keydir entry (in memory)
+```cpp
+struct KeydirEntry {
+    uint32_t file_id;        // constant in M1; needed for M3 multi-file
+    uint64_t record_offset;  // start of the whole record; files can exceed 4 GB
+    uint32_t record_size;    // header + key + value
+};
+```
+6. **Point at the whole record, not just the value.** Get still does exactly one read, and M2 can verify CRC on Get. (Value-only offset rejected: can't check CRC.)
+   - `record_offset` is 64-bit: a 32-bit offset silently wraps past 4 GB → reads the wrong record.
+   - `record_size` is 32-bit **only because Put enforces max key/value sizes**; saves memory per key.
+   - Values live only on disk; keydir holds key → location (keys must fit in RAM).
 
 ## Session log
 
