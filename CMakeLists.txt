@@ -38,6 +38,19 @@ add_library(kv_warnings INTERFACE)
 target_compile_options(kv_warnings INTERFACE -Wall -Wextra -Wpedantic -Werror)
 
 # ---------------------------------------------------------------------------
+# Library
+# ---------------------------------------------------------------------------
+add_library(kvstore
+  src/kvstore.cc
+  src/status.cc
+)
+target_include_directories(kvstore
+  PUBLIC  ${PROJECT_SOURCE_DIR}/include
+  PRIVATE ${PROJECT_SOURCE_DIR}/src
+)
+target_link_libraries(kvstore PRIVATE kv_warnings)
+
+# ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
 option(KV_BUILD_TESTS "Build tests" ON)
