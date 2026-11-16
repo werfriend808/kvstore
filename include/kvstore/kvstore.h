@@ -2,8 +2,10 @@
 #define KVSTORE_KVSTORE_H_
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 
 #include "kvstore/status.h"
 
@@ -59,8 +61,14 @@ class KVStore {
   Status Close();
 
  private:
-  // TODO(you): data members — e.g. the open file, the keydir, the directory.
-  // The KeydirEntry layout is decided in PROGRESS.md (decision 6).
+  struct KeydirEntry {
+    uint32_t file_id;
+    uint64_t record_offset;
+    uint32_t record_size;
+  };
+
+  std::unordered_map<std::string, KeydirEntry> keydir_;
+  int fd_ = -1;
 };
 
 }  // namespace kvstore
