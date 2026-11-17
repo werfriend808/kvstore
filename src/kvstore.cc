@@ -1,5 +1,11 @@
 #include "kvstore/kvstore.h"
 
+#include <fcntl.h>
+#include <cerrno>
+#include <cstring>
+#include <filesystem>
+#include <system_error>
+
 namespace kvstore {
 
 KVStore::~KVStore() {
@@ -7,9 +13,25 @@ KVStore::~KVStore() {
 }
 
 Status KVStore::Open(const std::string& dir) {
-  (void)dir;
-  // TODO(you): create dir if needed, open the data file, replay the log.
-  return Status::NotImplemented("Open");
+  if (fd_ >= 0) {
+    return Status::InvalidArgument("already open");
+  }
+
+  std::error_code ec;
+  std::filesystem::create_directories(dir, ec);
+  if (ec) {
+    return Status::IOError(ec.message());
+  }
+
+  std::filesystem::path path = std::filesystem::path(dir) / "000001.data";
+
+  fd_ = ::open(path.c_str(), O_RDWR | O_CREAT | O_APPEND, 0644);
+
+  if (fd_ < 0) {
+    return Status::IOError(std::strerror(errno));
+  }
+
+  return Status::Ok();
 }
 
 Status KVStore::Put(std::string_view key, std::string_view value) {
