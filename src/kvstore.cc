@@ -10,7 +10,7 @@
 namespace kvstore {
 
 KVStore::~KVStore() {
-  // TODO(you): close if open. A destructor can't return a Status, so ignore it.
+  (void)Close();
 }
 
 Status KVStore::Open(const std::string& dir) {
