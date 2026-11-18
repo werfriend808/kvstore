@@ -42,6 +42,7 @@ target_compile_options(kv_warnings INTERFACE -Wall -Wextra -Wpedantic -Werror)
 # ---------------------------------------------------------------------------
 add_library(kvstore
   src/kvstore.cc
+  src/record.cc
   src/status.cc
 )
 target_include_directories(kvstore
