@@ -12,6 +12,10 @@
 - [x] Error handling strategy (Status vs exceptions) → Status
 - [x] `KVStore` interface (Open/Put/Get/Delete/Close) with stubbed implementation
 - [x] Failing tests: round-trip, overwrite, missing key, delete, empty value, binary key/value, large value, reopen persistence (26 failing, as expected)
+- [x] KVStore data members (`keydir_`: unordered_map<string, KeydirEntry>, `fd_`)
+- [x] Open: create dir, open `000001.data` (no replay yet)
+- [x] Close + destructor (RAII)
+- [ ] Record encode/decode helpers + unit tests
 - [ ] Implement Put/Get/Delete
 - [ ] Implement log replay on Open (rebuild keydir)
 - [ ] All M1 tests green under Debug + ASan/UBSan
@@ -75,6 +79,12 @@ struct KeydirEntry {
    - Limits: `kMaxKeySize` = 64 KiB, `kMaxValueSize` = 64 MiB (`InvalidArgument` if exceeded). Empty keys rejected; empty values allowed.
    - `Open` creates the directory if missing. `Delete` of a missing key is OK and writes nothing. `Close` without `Open` is OK. Any op while not open → `InvalidArgument`.
 
+### File handling
+8. **POSIX fd (`open`/`pread`/`close`), not `std::fstream`.** `pread` reads a whole record at an offset in one call (decision 6); M2 needs explicit control over `fsync`. Open state is `fd_ >= 0`, so no separate `is_open` flag.
+9. **Data file `<dir>/000001.data`, opened `O_RDWR | O_CREAT | O_APPEND`.** Read+write (Put and Get); create on first Open; append-only. Never `O_TRUNC` (would wipe data on reopen). Note: `O_APPEND` alone means read-only (`O_RDONLY == 0`) → writes fail with EBADF. Numbered name prepares for M3 multi-file.
+10. **Close resets `fd_ = -1` even if `close()` fails.** On Linux the fd is released regardless; keeping it would block re-Open and risk writing to a reused fd. Errno is saved right after `close()`. Close also clears the keydir so re-Open rebuilds it from the log.
+11. **Destructor calls `(void)Close()`** (RAII): no fd leak if the user forgets Close. `(void)` because Status is `[[nodiscard]]`.
+
 ## Session log
 
 ### Session 1 — 2026-11-15
@@ -82,3 +92,10 @@ struct KeydirEntry {
 - CI: Debug and ASan+UBSan matrix on ubuntu-latest.
 - Smoke test passes locally in both configs.
 - Next: Bitcask concepts → decide record format & error handling → interface → failing tests.
+- (Continued 11-16) Decided record format, keydir entry, Status-based errors (decisions 1–7). Added `Status`, stubbed `KVStore` interface, 26 failing tests.
+
+### Session 2 — 2026-11-16 ~ 2026-11-17
+- Implemented KVStore data members, `Open` (create dir + open data file, no replay), `Close`, destructor.
+- Decisions 8–11 (fd vs fstream, open flags, Close semantics, RAII).
+- Tests: 6/30 passing (smoke, Status ×3, DoubleOpenIsRejected, CloseWithoutOpenIsOk). Rest wait on Put/Get/Delete/replay.
+- Next: record encode/decode helpers → Put → Get → Delete; then log replay.
