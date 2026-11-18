@@ -5,6 +5,7 @@
 #include <cstring>
 #include <filesystem>
 #include <system_error>
+#include <unistd.h>
 
 namespace kvstore {
 
@@ -55,8 +56,17 @@ Status KVStore::Delete(std::string_view key) {
 }
 
 Status KVStore::Close() {
-  // TODO(you): flush and close the data file, clear state.
-  return Status::NotImplemented("Close");
+  if (fd_ < 0) {
+    return Status::Ok();
+  }
+  int rc = ::close(fd_);
+  int err = errno;
+  fd_ = -1;
+  keydir_.clear();
+  if (rc < 0) {
+    return Status::IOError(std::strerror(err));
+  }
+  return Status::Ok();
 }
 
 }  // namespace kvstore
